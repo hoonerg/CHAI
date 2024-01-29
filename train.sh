@@ -1,8 +1,8 @@
 #!/bin/bash --login
 #$ -cwd
-#$ -l nvidia_v100=1
+#$ -l nvidia_v100=2
 
-#$ -pe smp.pe 8
+#$ -pe smp.pe 16
 
 
 # Latest version of CUDA

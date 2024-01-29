@@ -15,16 +15,17 @@ if __name__ == "__main__":
      
     data_dir = os.path.join("..", "climatehack", "data")
 
-    batch_size = 512
+    batch_size = 4096
     #num_sites = 300
     site_shuffle = True
     dropout = 0
     exp_name = 933 #f"T_PV_{num_sites}"
+    num_workers = 12
     
     USE_WANDB = False
     WANDB_PROJ = "CCAA"
     
-    TOTAL_EPOCH = 200
+    TOTAL_EPOCH = 100
      
     SRC_SEQ_LEN = 12
     TGT_SEQ_LEN = 48
@@ -67,18 +68,13 @@ if __name__ == "__main__":
             for data_source, locations in json.load(f).items()
         }
 
-    hrv_paths = [os.path.join(data_dir, "satellite-hrv", "2020", f"{i}.zarr.zip") for i in range(1, 13)] + \
-                [os.path.join(data_dir, "satellite-hrv", "2021", f"{i}.zarr.zip") for i in range(1, 10)]
+    hrv_paths = [os.path.join(data_dir, "satellite-hrv", "2021", f"{i}.zarr.zip") for i in range(8, 10)]
 
+    nonhrv_paths = [os.path.join(data_dir, "satellite-nonhrv", "2021", f"{i}.zarr.zip") for i in range(8, 10)]
 
-    nonhrv_paths = [os.path.join(data_dir, "satellite-nonhrv", "2020", f"{i}.zarr.zip") for i in range(1, 13)] + \
-        [os.path.join(data_dir, "satellite-nonhrv", "2021", f"{i}.zarr.zip") for i in range(1, 10)]
+    pv_paths = [os.path.join(data_dir, "pv", "2021", f"{i}.parquet") for i in range(8, 10)]
 
-    pv_paths = [os.path.join(data_dir, "pv", "2020", f"{i}.parquet") for i in range(1, 13)] + \
-        [os.path.join(data_dir, "pv", "2021", f"{i}.parquet") for i in range(1, 10)]
-
-    weather_paths = [os.path.join(data_dir, "weather", "2020", f"{i}.zarr.zip") for i in range(1, 13)] + \
-        [os.path.join(data_dir, "weather", "2021", f"{i}.zarr.zip") for i in range(1, 10)]
+    weather_paths = [os.path.join(data_dir, "weather", "2021", f"{i}.zarr.zip") for i in range(8, 10)]
 
     train_dataset = Dataset(hrv_paths=hrv_paths, 
                             nonhrv_paths=nonhrv_paths,
@@ -90,13 +86,13 @@ if __name__ == "__main__":
                             length=500,
                             site_shuffle=wandb_config["site_shuffle"])
     
-    test_hrv_paths = [os.path.join(data_dir, "satellite-hrv", "2020", f"{i}.zarr.zip") for i in range(10, 13)]
+    test_hrv_paths = [os.path.join(data_dir, "satellite-hrv", "2021", f"{i}.zarr.zip") for i in range(10, 11)]
 
-    test_nonhrv_paths = [os.path.join(data_dir, "satellite-nonhrv", "2021", f"{i}.zarr.zip") for i in range(10,13)]
+    test_nonhrv_paths = [os.path.join(data_dir, "satellite-nonhrv", "2021", f"{i}.zarr.zip") for i in range(10,11)]
 
-    test_pv_paths = [os.path.join(data_dir, "pv", "2021", f"{i}.parquet") for i in range(10,13)]
+    test_pv_paths = [os.path.join(data_dir, "pv", "2021", f"{i}.parquet") for i in range(10,11)]
 
-    test_weather_paths = [os.path.join(data_dir, "weather", "2021", f"{i}.zarr.zip") for i in range(10,13)]
+    test_weather_paths = [os.path.join(data_dir, "weather", "2021", f"{i}.zarr.zip") for i in range(10,11)]
     
     test_dataset = Dataset(hrv_paths=test_hrv_paths, 
                         nonhrv_paths=test_nonhrv_paths,
@@ -113,14 +109,14 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(train_dataset, 
                                 batch_size=wandb_config["batch_size"], 
                                 pin_memory=True,
-                                num_workers=0, 
+                                num_workers=num_workers, 
                                 worker_init_fn=worker_init_fn,
                                 collate_fn=collate_fn)
     
     test_dataloader = DataLoader(test_dataset, 
                                 batch_size=wandb_config["batch_size"], 
                                 pin_memory=True,
-                                num_workers=0, 
+                                num_workers=num_workers, 
                                 worker_init_fn=worker_init_fn,
                                 collate_fn=collate_fn)
     
@@ -134,11 +130,11 @@ if __name__ == "__main__":
                   tgt_size=TGT_SIZE,
                   dim_feedforward=FFN_HID_DIM,
                   dropout=dropout)
-    
+    '''
     if torch.cuda.device_count() > 1:
         print("Using", torch.cuda.device_count(), "GPUs!")
         model = nn.DataParallel(model)
-
+    '''
     model.to(device)
     
     summary(model, input_size=[(SRC_SEQ_LEN, batch_size, SRC_SIZE),
@@ -173,12 +169,17 @@ if __name__ == "__main__":
                            device=device)
         
         chkp_pth = os.path.join(chkpnt_dir, f"{exp_name}_mdl_chkpnt_epoch_{epoch}.pt")
+        torch.save(model.state_dict(), chkp_pth)
+        print(f"Epoch {epoch + 1} [TRAIN]: {train_loss}")
         # Save model checkpoint
+        '''
         if isinstance(model, nn.DataParallel):
             torch.save(model.module.state_dict(), chkp_pth)
         else:
             torch.save(model.state_dict(), chkp_pth)
+        '''
         print(f"Epoch {epoch + 1} [TRAIN]: {train_loss}")
+
         
         # -----------------VALIDATION-----------------
         validation_loss = validate(model=model,
